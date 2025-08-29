@@ -1,0 +1,63 @@
+# version: '3.8'
+
+services:
+  # SQL Server Database
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: registration-mssql
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong@Passw0rd
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+    networks:
+      - registration-network
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "YourStrong@Passw0rd" -Q "SELECT 1"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ASP.NET Core Web API
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: registration-api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__DefaultConnection=Server=mssql;Database=RegistrationDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;
+    ports:
+      - "8080:8080"
+    depends_on:
+      mssql:
+        condition: service_healthy
+    networks:
+      - registration-network
+    restart: unless-stopped
+
+  # React Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: registration-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    networks:
+      - registration-network
+    restart: unless-stopped
+
+networks:
+  registration-network:
+    driver: bridge
+
+volumes:
+  mssql_data:
+    driver: local
